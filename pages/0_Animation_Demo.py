@@ -63,6 +63,34 @@ def process_data(df_proyectos, df_operaciones, df_operaciones_desembolsos):
     merged_df['Monto'] = (merged_df['Monto']/1000).round(0)
     st.write(merged_df)
 
+    # Convertir la columna 'FechaEfectiva' al formato de fecha y hora
+    merged_df['FechaEfectiva'] = pd.to_datetime(merged_df['FechaEfectiva'])
+
+    # Extraer el año y el mes de la columna 'FechaEfectiva'
+    merged_df['Año'] = merged_df['FechaEfectiva'].dt.year
+    merged_df['Mes'] = merged_df['FechaEfectiva'].dt.month
+
+    # Crear un selector para filtrar por año
+    año_seleccionado = st.selectbox(
+        'Selecciona un año', 
+        options=np.sort(merged_df['Año'].unique())
+    )
+
+    # Filtrar el DataFrame por el año seleccionado
+    df_filtrado_por_año = merged_df[merged_df['Año'] == año_seleccionado]
+
+    # Crear un slider para seleccionar el mes
+    mes_seleccionado = st.slider(
+        'Selecciona un mes', 
+        min_value=1, 
+        max_value=12, 
+        value=1
+    )
+
+    # Filtrar el DataFrame por el mes seleccionado
+    df_filtrado = df_filtrado_por_año[df_filtrado_por_año['Mes'] == mes_seleccionado]
+
+
     resumen_df = merged_df.groupby('IDAreaPrioritaria').agg(
     Proyectos=('IDEtapa', 'nunique'),  # Cuenta el número único de IDEtapa
     Suma_Monto=('Monto', 'sum')        # Suma de Monto
@@ -95,5 +123,3 @@ df_operaciones = load_data(sheet_url_operaciones)
 df_operaciones_desembolsos = load_data(sheet_url_desembolsos)
 
 processed_data = process_data(df_proyectos, df_operaciones, df_operaciones_desembolsos)
-
-
