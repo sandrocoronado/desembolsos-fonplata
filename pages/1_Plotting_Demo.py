@@ -6,7 +6,6 @@ import io
 import matplotlib.pyplot as plt
 import altair as alt
 
-
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
