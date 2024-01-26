@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 import threading
 import io
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
 
 def dataframe_to_excel_bytes(df):
     output = io.BytesIO()
@@ -72,6 +76,38 @@ def create_pivot_table(filtered_df, value_column):
     
     return pivot_table
 
+exclude_IDEtapa = [
+    "AR030_1", "UR018_1", "UR021_1", "UR022_1", "UR023_1", 
+    "AR031_1", "AR031_2", "AR033_1", "AR044_1", "AR044_2", 
+    "AR046_1", "BO030_1", "BO032_1", "UR019_1", "AR038_1", 
+    "AR043_1", "AR043_2"
+]
+
+# Función para excluir IDEtapa específicos del DataFrame
+def exclude_IDEtapa_from_df(df, exclude_list):
+    return df[~df['IDEtapa'].isin(exclude_list)]
+
+# Función para realizar la regresión polinómica de grado 3
+def perform_regression(df):
+    X = df[['Año']].values
+    y = df['PorcentajeAcumulado'].values
+    poly_features = PolynomialFeatures(degree=3)
+    X_poly = poly_features.fit_transform(X)
+    poly_model = LinearRegression()
+    poly_model.fit(X_poly, y)
+    r2_poly = r2_score(y, poly_model.predict(X_poly))
+    return poly_model, r2_poly, X, y
+
+def plot_regression_results(X, y, poly_model):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(X, y, color='blue', label='Datos Reales')
+    ax.plot(X, poly_model.predict(PolynomialFeatures(degree=3).fit_transform(X)), color='green', label='Línea de Regresión Polinómica')
+    ax.set_xlabel('Año')
+    ax.set_ylabel('Porcentaje Acumulado')
+    ax.legend()
+    return fig
+
+
 def run():
     df_proyectos = load_data(sheet_url_proyectos)
     df_operaciones = load_data(sheet_url_operaciones)
@@ -132,84 +168,42 @@ def run():
     # Filtrar filas donde el porcentaje acumulado es mayor a 0.
     df_long_format = df_long_format[df_long_format['PorcentajeAcumulado'] > 0]
 
-    st.dataframe(df_long_format)
+    # Primero, filtrar para incluir solo los IDEtapa deseados
+    include_IDEtapa = [
+        "AR030_1", "AR031_2", "AR033_1", "AR038_1", "AR043_1", "AR043_2", "AR044_1",
+        "UR018_1", "UR021_1", "UR022_1", "UR023_1", "AR031_1", "AR044_2", "AR046_1",
+        "AR048_1", "BO024_1", "BO030_1", "BO032_1", "PY016_2", "UR019_1", "AR020_1",
+        "AR026_1", "AR040_1", "BO020_1", "BO023_1", "BO029_1", "BR025_1", "PY021_1",
+        "PY026_1", "UR016_1", "UR017_1", "UR020_1", "AR019_1", "AR022_1", "AR027_1",
+        "BO025_1", "BO032_2", "PY020_2", "AR021_1", "AR024_1", "AR037_1", "PY020_1",
+        "AR025_1", "AR028_1", "BO028_1", "BR016_1", "BO021_1", "BO022_1", "UR014_1"
+    ]
+    filtered_df = df_long_format[df_long_format['IDEtapa'].isin(include_IDEtapa)]
 
-    excel_bytes_porcentaje = dataframe_to_excel_bytes(df_long_format)
+    # Luego, excluir los IDEtapa específicos del conjunto ya filtrado
+    exclude_IDEtapa = [
+        "AR030_1", "UR018_1", "UR021_1", "UR022_1", "UR023_1", "AR031_1", "AR031_2",
+        "AR033_1", "AR044_1", "AR044_2", "AR046_1", "BO030_1", "BO032_1", "UR019_1",
+        "AR038_1", "AR043_1", "AR043_2"
+    ]
+    final_df = exclude_IDEtapa_from_df(filtered_df, exclude_IDEtapa)
+
+    # Realizar regresión polinómica de grado 3 con el DataFrame final
+    poly_model, r2_poly, X, y = perform_regression(final_df)
+
+    # Mostrar R^2 y gráfico de regresión
+    st.write("Coeficiente de Determinación (R^2) para la Regresión Polinómica: ", r2_poly)
+    fig = plot_regression_results(X, y, poly_model)
+    st.pyplot(fig)
+
+    # Botón para descargar los datos de regresión en Excel
+    excel_bytes = dataframe_to_excel_bytes(final_df)
     st.download_button(
-        label="Descargar DataFrame en Excel (Porcentaje Acumulado)",
-        data=excel_bytes_porcentaje,
-        file_name="matriz_porcentaje_acumulado_desembolsos.xlsx",
+        label="Descargar datos de regresión en Excel",
+        data=excel_bytes,
+        file_name="datos_regresion.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    # Crear y mostrar el gráfico de dispersión.
-    st.scatter_chart(df_long_format, x='Año', y='PorcentajeAcumulado')
-
-    # Aplicando la misma lógica para calcular los años hasta ahora y la categorización
-    porcentaje_pivot['Años hasta Ahora'] = porcentaje_pivot.iloc[:, 1:10].apply(
-            lambda row: row.last_valid_index(), axis=1
-        )
-
-        # Creando la función de categorización
-    def categorize_project(row):
-            if row['Total'] == 100:
-                return 'Completado'
-            elif row['Total'] >= 50:
-                return 'Últimos Desembolsos'
-            else:
-                return 'Empezando sus Desembolsos'
-
-        # Identificamos las columnas que contienen los porcentajes por año, excluyendo 'Total' y 'Años hasta Ahora'
-    year_columns = [col for col in porcentaje_pivot.columns if col not in ['Total', 'Años hasta Ahora']]
-
-        # Encontramos el último año con un valor que no sea cero para cada proyecto
-    last_year_with_value = porcentaje_pivot[year_columns].apply(lambda row: row[row > 0].last_valid_index(), axis=1)
-
-        # Agregamos esta información al DataFrame
-    porcentaje_pivot['Último Año'] = last_year_with_value
-
-        # Creando la columna de categorización
-    porcentaje_pivot['Categoría'] = porcentaje_pivot.apply(categorize_project, axis=1)
-
-        # Restableciendo el índice para convertir 'IDEtapa' de nuevo en una columna
-    porcentaje_pivot_reset = porcentaje_pivot.reset_index()
-
-        # Seleccionando las columnas para la tabla final
-    final_table_pivot = porcentaje_pivot_reset[['IDEtapa', 'Total', 'Último Año', 'Categoría']]
-
-        # Creando la columna de categorización
-    porcentaje_pivot['Categoría'] = porcentaje_pivot.apply(categorize_project, axis=1)
-
-        # Contando el número de proyectos en cada categoría
-    category_counts_pivot = porcentaje_pivot['Categoría'].value_counts()
-
-        # Utilizar st.columns para colocar gráficos lado a lado
-    col1, col2 = st.columns(2)
-    with col1:
-            # Mostrando las primeras filas de la tabla final
-            final_table_pivot
-
-    with col2:
-            # Mostrando las primeras filas de la tabla final
-            category_counts_pivot
-
-    # Calcular el promedio del último año
-    porcentaje_pivot['Último Año'] = pd.to_numeric(porcentaje_pivot['Último Año'], errors='coerce')
-    porcentaje_pivot = porcentaje_pivot[porcentaje_pivot['Total'] == 100]
-    filtered_data = porcentaje_pivot.dropna(subset=['Último Año'])
-    promedio_ultimo_año = filtered_data['Último Año'].mean().round(0)
-    maximo_ultimo_año = filtered_data['Último Año'].max().round(2)
-
-
-   # Contar la cantidad de proyectos (IDEtapa)
-    cantidad_proyectos = porcentaje_pivot.index.nunique()
-
-    # Mostrar el promedio y la cantidad de proyectos en la aplicación Streamlit
-    st.subheader('Estadisticas sobre Desembolsos Completados')
-    st.write(f'Promedio de Años en Completar: {promedio_ultimo_año}')
-    st.write(f'Proyecto que más Años demoro : {maximo_ultimo_año}')
-    st.write(f'Cantidad de Proyectos con Desembolsos Completados: {cantidad_proyectos}')
-
 
 if __name__ == "__main__":
     run()
