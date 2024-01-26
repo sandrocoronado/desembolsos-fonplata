@@ -2,6 +2,9 @@ import streamlit as st
 import altair as alt
 import pandas as pd
 
+def calcular_porcentaje_todos(año):
+    return 0.0183 * año**4 - 0.0281 * año**3 - 3.8759 * año**2 + 33.508 * año + 18.887
+
 # Funciones que calculan el PorcentajeAcumulado para cada sector
 def calcular_porcentaje_inf(año):
     return 0.0065 * año**4 + 0.286 * año**3 - 6.5063 * año**2 + 40.386 * año + 19.582
@@ -11,28 +14,6 @@ def calcular_porcentaje_soc(año):
 
 def calcular_porcentaje_pro(año):
     return 0.1935 * año**3 - 4.3676 * año**2 + 33.192 * año + 13.825
-
-# Título de la aplicación en Streamlit
-st.title('Pronóstico de Porcentaje Acumulado por Sector')
-
-# Selección del Sector con la opción "Todos" incluida
-sector = st.selectbox('Selecciona el sector del proyecto:', ('Todos', 'INF', 'SOC', 'PRO'))
-
-# Campo para que el usuario ingrese el Año
-año_usuario = st.number_input('Introduce el Año para calcular el Porcentaje Acumulado:', min_value=0.0, format='%f')
-
-# Botón para realizar el cálculo
-if st.button('Calcular Porcentaje Acumulado'):
-    # Cálculo del resultado según el sector seleccionado
-    if sector == 'INF':
-        resultado = calcular_porcentaje_inf(año_usuario)
-    elif sector == 'SOC':
-        resultado = calcular_porcentaje_soc(año_usuario)
-    elif sector == 'PRO':
-        resultado = calcular_porcentaje_pro(año_usuario)
-    
-    # Mostrar resultado
-    st.write(f'El Porcentaje Acumulado pronosticado para el sector {sector} en el año {año_usuario} es: {resultado:.2f}%')
 
 # Genera los datos para los gráficos
 def generar_datos():
@@ -84,14 +65,45 @@ def generar_datos_df():
 # Título de la aplicación en Streamlit
 st.title('Pronóstico de Porcentaje Acumulado por Sector')
 
-# Genera los datos y crea el gráfico
-datos = generar_datos()
-grafico = crear_grafico(datos)
+# Selección del Sector con la opción "Todos" incluida
+sector = st.selectbox('Selecciona el sector del proyecto:', ('Todos', 'INF', 'SOC', 'PRO'))
+
+# Genera los datos para el DataFrame y el gráfico
+datos_df = generar_datos_df()
+datos_grafico = generar_datos()
+
+# Filtrar los datos para el gráfico si no se selecciona "Todos"
+if sector != 'Todos':
+    datos_grafico = datos_grafico[datos_grafico['Sector'] == sector]
+    datos_df = datos_df[['Año', sector]]  # Filtra las columnas para solo mostrar el sector seleccionado
+
+# Campo para que el usuario ingrese el Año
+año_usuario = st.number_input('Introduce el Año para calcular el Porcentaje Acumulado:', min_value=0.0, format='%f')
+
+# Botón para realizar el cálculo
+if st.button('Calcular Porcentaje Acumulado'):
+    resultado = None
+    # Cálculo del resultado según el sector seleccionado
+    if sector == 'INF':
+        resultado = calcular_porcentaje_inf(año_usuario)
+    elif sector == 'SOC':
+        resultado = calcular_porcentaje_soc(año_usuario)
+    elif sector == 'PRO':
+        resultado = calcular_porcentaje_pro(año_usuario)
+    elif sector == 'Todos':
+        resultado = calcular_porcentaje_todos(año_usuario)
+    
+    # Mostrar resultado
+    if resultado is not None:
+        st.write(f'El Porcentaje Acumulado pronosticado para el sector {sector} en el año {año_usuario} es: {resultado:.2f}%')
+
+# Crea el gráfico de líneas con Altair
+grafico = crear_grafico(datos_grafico)
 
 # Muestra el gráfico en la aplicación de Streamlit
 st.altair_chart(grafico, use_container_width=True)
 
-# Genera el DataFrame y muestra los datos
-df_resultados = generar_datos_df()
-st.write("Tendencia de Desembolso en Porcentaje Acumulado por Año y Sector:")
-st.dataframe(df_resultados)
+# Muestra el DataFrame en la aplicación de Streamlit
+st.write(f"Tendencia de Desembolso en Porcentaje Acumulado por Año y Sector: {sector}")
+st.dataframe(datos_df)
+
